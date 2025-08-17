@@ -15,7 +15,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: '3.11' }
+        with:
+          python-version: '3.11'
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
@@ -116,7 +117,8 @@ jobs:
       - name: Create kind cluster
         uses: helm/kind-action@v1.9.0
       - name: Stage 5 - Kubernetes tests
-        env: { IMAGE: ${{ env.IMAGE_REPO }}:latest }
+        env:
+          IMAGE: ${{ env.IMAGE_REPO }}:latest
         run: |
           kubectl apply -f k8s/mysql-secret.yaml
           kubectl apply -f k8s/mysql-statefulset.yaml
@@ -164,4 +166,6 @@ jobs:
           curl -f http://localhost:5000/health
           EOF
       - uses: actions/upload-artifact@v4
-        with: { name: manual-deploy, path: MANUAL_DEPLOY.md }
+        with:
+          name: manual-deploy
+          path: MANUAL_DEPLOY.md
