@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+  labels: {app: mysql}
+spec:
+  serviceName: mysql
+  replicas: 1
+  selector:
+    matchLabels: {app: mysql}
+  template:
+    metadata: {labels: {app: mysql}}
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          args: ["--default-authentication-plugin=mysql_native_password"]
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom: {secretKeyRef: {name: mysql-secret, key: mysql-root-password}}
+            - name: MYSQL_DATABASE
+              valueFrom: {secretKeyRef: {name: mysql-secret, key: mysql-database}}
+            - name: MYSQL_USER
+              valueFrom: {secretKeyRef: {name: mysql-secret, key: mysql-user}}
+            - name: MYSQL_PASSWORD
+              valueFrom: {secretKeyRef: {name: mysql-secret, key: mysql-password}}
+          ports:
+            - containerPort: 3306
+              name: mysql
+          livenessProbe:
+            exec: {command: ["sh","-c","mysqladmin ping -uroot -p$MYSQL_ROOT_PASSWORD --silent"]}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec: {command: ["sh","-c","mysqladmin ping -uroot -p$MYSQL_ROOT_PASSWORD --silent"]}
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          resources:
+            requests: {cpu: "100m", memory: "256Mi"}
+            limits:   {cpu: "500m", memory: "512Mi"}
+          volumeMounts:
+            - name: mysql-persistent-storage
+              mountPath: /var/lib/mysql
+  volumeClaimTemplates:
+    - metadata: {name: mysql-persistent-storage}
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources: {requests: {storage: 2Gi}}

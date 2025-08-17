@@ -1,0 +1,167 @@
+name: CI/CD Pipeline (WorkProfile Level 2)
+
+on:
+  push:
+    branches: ["main","master"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  IMAGE_REPO: ${{ secrets.DOCKERHUB_USERNAME }}/workprofile-advanced
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Stage 1 - Basic validation
+        run: |
+          python -c "import flask; print('✓ Flask import successful')"
+          python -c "import mysql.connector; print('✓ MySQL connector import successful')"
+          test -f Dockerfile && echo "✓ Dockerfile exists"
+          test -f requirements.txt && echo "✓ requirements.txt exists"
+          test -f src/app.py && echo "✓ src/app.py exists"
+
+  build_test:
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compute version
+        id: meta
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="0.0.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: |
+            ${{ env.IMAGE_REPO }}:${{ steps.meta.outputs.version }}
+            ${{ env.IMAGE_REPO }}:latest
+      - name: Stage 2 - Single container tests
+        run: |
+          docker run -d -p 5000:5000 --name test-app \
+            -e DB_HOST=localhost -e DB_USER=flaskapp -e DB_PASS=flaskapp -e DB_NAME=exampleDb \
+            ${{ env.IMAGE_REPO }}:${{ steps.meta.outputs.version }}
+          sleep 15
+          curl -f http://localhost:5000/ && echo "✓ Main endpoint works"
+          curl -f http://localhost:5000/health && echo "✓ Health endpoint works"
+          docker rm -f test-app
+
+  compose_test:
+    runs-on: ubuntu-latest
+    needs: build_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage 3 - 3-tier compose
+        run: |
+          cd docker-compose
+          docker compose up -d
+          sleep 90
+          curl -f http://localhost:8080/ && echo "✓ Nginx proxy works"
+          curl -f http://localhost:8080/health && echo "✓ Health through nginx works"
+          curl -s http://localhost:8080/health | grep "Database: Healthy" && echo "✓ Database connectivity works"
+      - name: Cleanup compose
+        if: always()
+        run: |
+          cd docker-compose
+          docker compose down -v
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: compose_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compute version
+        id: meta
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="0.0.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Stage 4 - Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_REPO }}:${{ steps.meta.outputs.version }}
+            ${{ env.IMAGE_REPO }}:latest
+
+  k8s_test:
+    runs-on: ubuntu-latest
+    needs: publish
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.9.0
+      - name: Stage 5 - Kubernetes tests
+        env: { IMAGE: ${{ env.IMAGE_REPO }}:latest }
+        run: |
+          kubectl apply -f k8s/mysql-secret.yaml
+          kubectl apply -f k8s/mysql-statefulset.yaml
+          kubectl apply -f k8s/mysql-service.yaml
+          kubectl rollout status statefulset/mysql --timeout=600s
+          kubectl wait --for=condition=ready pod/mysql-0 --timeout=600s
+
+          sed -i "s#docker.io/ayalagiyub/workprofile-advanced:latest#${IMAGE}#" k8s/workprofile-deployment.yaml
+          kubectl apply -f k8s/workprofile-configmap.yaml
+          kubectl apply -f k8s/workprofile-deployment.yaml
+          kubectl apply -f k8s/workprofile-service.yaml
+          kubectl rollout status deployment/workprofile --timeout=600s
+
+          kubectl port-forward deployment/workprofile 5000:5000 &
+          PF_PID=$!
+          sleep 20
+          curl -f http://localhost:5000/ && echo "✓ Kubernetes app works"
+          curl -f http://localhost:5000/health && echo "✓ Kubernetes health works"
+          curl -s http://localhost:5000/health | grep "Database: Healthy" && echo "✓ Kubernetes database works"
+          kill $PF_PID
+
+  manual:
+    runs-on: ubuntu-latest
+    needs: k8s_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage 6 - Create manual guide
+        run: |
+          cat > MANUAL_DEPLOY.md << 'EOF'
+          # Killercoda – פריסה ידנית
+          kubectl apply -f k8s/mysql-secret.yaml
+          kubectl apply -f k8s/mysql-statefulset.yaml
+          kubectl apply -f k8s/mysql-service.yaml
+          kubectl wait --for=condition=ready pod/mysql-0 --timeout=600s
+
+          kubectl apply -f k8s/workprofile-configmap.yaml
+          kubectl apply -f k8s/workprofile-deployment.yaml
+          kubectl apply -f k8s/workprofile-service.yaml
+          kubectl wait --for=condition=available deployment/workprofile --timeout=600s
+
+          # בדיקות
+          kubectl port-forward deployment/workprofile 5000:5000 &
+          sleep 20
+          curl -f http://localhost:5000/
+          curl -f http://localhost:5000/health
+          EOF
+      - uses: actions/upload-artifact@v4
+        with: { name: manual-deploy, path: MANUAL_DEPLOY.md }

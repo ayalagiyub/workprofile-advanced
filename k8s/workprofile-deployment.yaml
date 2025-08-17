@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workprofile
+  labels: {app: workprofile}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: workprofile}
+  template:
+    metadata: {labels: {app: workprofile}}
+    spec:
+      initContainers:
+        - name: wait-for-mysql
+          image: mysql:8.0
+          env:
+            - name: DB_HOST
+              valueFrom: {configMapKeyRef: {name: workprofile-config, key: DB_HOST}}
+            - name: DB_USER
+              valueFrom: {secretKeyRef: {name: mysql-secret, key: mysql-user}}
+            - name: DB_PASS
+              valueFrom: {secretKeyRef: {name: mysql-secret, key: mysql-password}}
+          command: ["sh","-c","until mysqladmin ping -h$DB_HOST -u$DB_USER -p$DB_PASS --silent; do echo waiting; sleep 3; done"]
+      containers:
+        - name: workprofile
+          image: docker.io/ayalagiyub/workprofile-advanced:latest
+          env:
+            - name: DB_HOST
+              valueFrom: {configMapKeyRef: {name: workprofile-config, key: DB_HOST}}
+            - name: DB_NAME
+              valueFrom: {configMapKeyRef: {name: workprofile-config, key: DB_NAME}}
+            - name: DB_USER
+              valueFrom: {secretKeyRef: {name: mysql-secret, key: mysql-user}}
+            - name: DB_PASS
+              valueFrom: {secretKeyRef: {name: mysql-secret, key: mysql-password}}
+          ports:
+            - containerPort: 5000
+          readinessProbe:
+            httpGet: {path: /health, port: 5000}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /health, port: 5000}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            requests: {cpu: "100m", memory: "128Mi"}
+            limits:   {cpu: "500m", memory: "256Mi"}
