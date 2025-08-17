@@ -7,7 +7,9 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE_REPO: ${{ secrets.DOCKERHUB_USERNAME }}/workprofile-advanced
+  IMAGE_REPO: ghcr.io/${{ secrets.GHCR_USERNAME }}/workprofile-advanced
+
+
 
 jobs:
   validate:
@@ -98,8 +100,9 @@ jobs:
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_TOKEN }}
       - name: Stage 4 - Build & push
         uses: docker/build-push-action@v6
         with:
