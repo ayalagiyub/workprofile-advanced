@@ -31,6 +31,7 @@ FROM python:3.9-slim
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
     build-essential \
+    pkg-config \
     default-libmysqlclient-dev \
     libpq-dev \
  && rm -rf /var/lib/apt/lists/*
@@ -48,10 +49,3 @@ EXPOSE 5000
 
 CMD ["python","app.py"]
        
-
-
-
-
-
-
-
