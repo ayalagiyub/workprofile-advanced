@@ -346,11 +346,12 @@ jobs:
           echo "Waiting for Flask app to be ready..."
           timeout=180
           SECONDS=0
-          until docker compose exec -T workprofile curl -s http://127.0.0.1:5000/ > /dev/null; do
+          until curl -s http://localhost:8080/ > /dev/null; do
             sleep 5
             (( SECONDS += 5 ))
             if [ $SECONDS -ge $timeout ]; then
               echo "❌ Flask app failed to start in time"
+              docker compose logs nginx
               docker compose logs workprofile 
               exit 1
             fi
