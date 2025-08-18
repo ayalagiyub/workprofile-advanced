@@ -75,7 +75,10 @@ jobs:
         run: |
           cd docker-compose
           docker compose up -d
-          sleep 90
+          sleep 120
+          docker compose logs Workprofile
+          docker compose logs nginx
+          docker compose logs mysql
           curl -f http://localhost:8080/ && echo "✓ Nginx proxy works"
           curl -f http://localhost:8080/health && echo "✓ Health through nginx works"
           curl -s http://localhost:8080/health | grep "Database: Healthy" && echo "✓ Database connectivity works"
