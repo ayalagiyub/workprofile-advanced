@@ -51,6 +51,7 @@ jobs:
         with:
           context: .
           push: false
+          progress: plain
           tags: |
             ${{ env.IMAGE_REPO }}:${{ steps.meta.outputs.version }}
             ${{ env.IMAGE_REPO }}:latest
