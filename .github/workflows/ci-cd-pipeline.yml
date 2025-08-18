@@ -340,6 +340,8 @@ jobs:
               exit 1
             fi
           done
+          docker compose ps
+          docker compose logs workprofile --tail=20
 
           echo "Waiting for Flask app to be ready..."
           timeout=180
