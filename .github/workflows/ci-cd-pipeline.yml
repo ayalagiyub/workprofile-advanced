@@ -63,48 +63,105 @@ jobs:
           curl -f http://localhost:5000/ && echo "✓ Main endpoint works"
           curl -f http://localhost:5000/health && echo "✓ Health endpoint works"
           docker rm -f test-app
+compose_test:
+  runs-on: ubuntu-latest
+  needs: build_test
+  steps:
+    - uses: actions/checkout@v4
+    - name: Stage 3 - 3-tier compose
+      run: |
+        cd docker-compose
 
-  compose_test:
-    runs-on: ubuntu-latest
-    needs: build_test
-    steps:
-      - uses: actions/checkout@v4
-      - name: Stage 3 - 3-tier compose
-        run: |
-          cd docker-compose
+        # להרים את כל השירותים
+        docker compose up -d
 
-          # להרים את כל השירותים
-          docker compose up -d
+        # לחכות עד שה־MySQL בריא עם timeout
+        echo "Waiting for MySQL to be healthy..."
+        timeout=60
+        SECONDS=0
+        until docker compose exec -T mysql mysqladmin ping -uroot -prootpass123 --silent; do
+          sleep 5
+          (( SECONDS += 5 ))
+          if [ $SECONDS -ge $timeout ]; then
+            echo "❌ MySQL failed to start in time"
+            docker compose logs mysql
+            exit 1
+          fi
+        done
 
-          # לחכות עד שה־MySQL בריא
-          echo "Waiting for MySQL to be healthy..."
-          until docker compose exec -T mysql mysqladmin ping -uroot -prootpass123 --silent; do
-            sleep 5
-          done
+        # לחכות עד שה־Flask מוכן עם timeout
+        echo "Waiting for Flask app to be ready..."
+        timeout=60
+        SECONDS=0
+        until docker compose exec -T workprofile curl -s http://localhost:5000/ > /dev/null; do
+          sleep 5
+          (( SECONDS += 5 ))
+          if [ $SECONDS -ge $timeout ]; then
+            echo "❌ Flask app failed to start in time"
+            docker compose logs workprofile
+            exit 1
+          fi
+        done
 
-          # לחכות עד שה־Flask מוכן
-          echo "Waiting for Flask app to be ready..."
-          until docker compose exec -T workprofile curl -s http://localhost:5000/ > /dev/null; do
-            sleep 5
-          done
+        # בדיקות nginx
+        curl -f http://localhost:8080/ && echo "✓ Nginx proxy works"
+        curl -f http://localhost:8080/health && echo "✓ Health through nginx works"
 
-          # בדיקות nginx
-          curl -f http://localhost:8080/ && echo "✓ Nginx proxy works"
-          curl -f http://localhost:8080/health && echo "✓ Health through nginx works"
+        # בדיקת חיבור למסד נתונים דרך endpoint
+        curl -s http://localhost:8080/health | grep "Database: Healthy" && echo "✓ Database connectivity works"
 
-          # בדיקת חיבור למסד נתונים דרך endpoint
-          curl -s http://localhost:8080/health | grep "Database: Healthy" && echo "✓ Database connectivity works"
+        # לוגים למקרה של בעיה
+        docker compose logs workprofile
+        docker compose logs nginx
+        docker compose logs mysql
 
-          # לוגים למקרה של בעיה
-          docker compose logs workprofile
-          docker compose logs nginx
-          docker compose logs mysql
+    - name: Cleanup compose
+      if: always()
+      run: |
+        cd docker-compose
+        docker compose down -v
 
-      - name: Cleanup compose
-        if: always()
-        run: |
-          cd docker-compose
-          docker compose down -v
+  # compose_test:
+  #   runs-on: ubuntu-latest
+  #   needs: build_test
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Stage 3 - 3-tier compose
+  #       run: |
+  #         cd docker-compose
+
+  #         # להרים את כל השירותים
+  #         docker compose up -d
+
+  #         # לחכות עד שה־MySQL בריא
+  #         echo "Waiting for MySQL to be healthy..."
+  #         until docker compose exec -T mysql mysqladmin ping -uroot -prootpass123 --silent; do
+  #           sleep 5
+  #         done
+
+  #         # לחכות עד שה־Flask מוכן
+  #         echo "Waiting for Flask app to be ready..."
+  #         until docker compose exec -T workprofile curl -s http://localhost:5000/ > /dev/null; do
+  #           sleep 5
+  #         done
+
+  #         # בדיקות nginx
+  #         curl -f http://localhost:8080/ && echo "✓ Nginx proxy works"
+  #         curl -f http://localhost:8080/health && echo "✓ Health through nginx works"
+
+  #         # בדיקת חיבור למסד נתונים דרך endpoint
+  #         curl -s http://localhost:8080/health | grep "Database: Healthy" && echo "✓ Database connectivity works"
+
+  #         # לוגים למקרה של בעיה
+  #         docker compose logs workprofile
+  #         docker compose logs nginx
+  #         docker compose logs mysql
+
+  #     - name: Cleanup compose
+  #       if: always()
+  #       run: |
+  #         cd docker-compose
+  #         docker compose down -v
 
   publish:
     runs-on: ubuntu-latest
