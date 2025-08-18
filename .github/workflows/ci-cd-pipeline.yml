@@ -76,7 +76,7 @@ jobs:
           cd docker-compose
           docker compose up -d
           sleep 120
-          docker compose logs Workprofile
+          docker compose logs workprofile
           docker compose logs nginx
           docker compose logs mysql
           curl -f http://localhost:8080/ && echo "✓ Nginx proxy works"
