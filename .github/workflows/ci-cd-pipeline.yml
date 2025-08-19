@@ -415,7 +415,16 @@ jobs:
           kubectl apply -f k8s/mysql-statefulset.yaml
           kubectl apply -f k8s/mysql-service.yaml
           kubectl rollout status statefulset/mysql --timeout=600s
-          kubectl wait --for=condition=ready pod/mysql-0 --timeout=600s
+          kubectl wait --for=condition=ready pod/mysql-0 --timeout=600s || {
+            echo "❌ Pod mysql-0 לא הצליח להיות מוכן בזמן"
+            echo "מצב הפודים:"
+            kubectl get pods
+            echo "תיאור ה־pod:"
+           kubectl describe pod mysql-0
+           echo "לוגים מה־pod:"
+           kubectl logs mysql-0
+           exit 1
+          }
 
           kubectl get pods
           kubectl describe pod mysql-0 || true
