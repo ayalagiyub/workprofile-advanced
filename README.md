@@ -74,13 +74,13 @@ workprofile-advanced/
 
  🧵 תרשים פייפליין
 
-(יש להוסיף תמונה: `./path-to-diagram.png`)
+https://excalidraw.com/#json=vdzpStyrkjOiWQeJe_f4_,sM2VrFlbgAaff3beriIzbA
 
 ---
 
  🛠️ הוראות הפעלה
 
-את הוראות הפריסה המלאות ניתן למצוא בקובץ הפייפליין (`ci-cd-pipeline.yml`) או בסוף קובץ זה – כולל Killercoda.
+את הוראות הפריסה המלאות ניתן למצוא בקובץ הפייפליין (`ci-cd-pipeline.yml`) או בסוף קובץ זה – כולל Killercoda.(שלצערי עקב חוסר ב CPU לא הצלחתי להגיע לשלב זה.. הסבר ניתן לקרוא במשוב)
 
 ---
 
@@ -93,4 +93,6 @@ MIT
  ✍️ נוצר על ידי
 
 אילה מנצר| משימת גמר CI/CD | שנת 2025
+
+
 
