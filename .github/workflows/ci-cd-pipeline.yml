@@ -160,13 +160,7 @@ jobs:
               extraPortMappings:
                 - containerPort: 5000
                   hostPort: 5000
-              resources:
-                limits:
-                  cpu: "2"
-                  memory: "4Gi"
-                requests:
-                  cpu: "1"
-                  memory: "2Gi"
+
           EOF
           kind create cluster --name kind --config kind-config.yaml
 
